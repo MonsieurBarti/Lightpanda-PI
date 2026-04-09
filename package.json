@@ -1,5 +1,5 @@
 {
-	"name": "pi-lightpanda-search-extension",
+	"name": "@the-forge-flow/lightpanda-pi",
 	"version": "0.1.0",
 	"description": "PI extension for web search using Lightpanda headless browser",
 	"type": "module",
@@ -43,12 +43,15 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/monsieurbarti/pi-lightpanda-search-extension.git"
+		"url": "git+https://github.com/monsieurbarti/Lightpanda-PI.git"
 	},
 	"bugs": {
-		"url": "https://github.com/monsieurbarti/pi-lightpanda-search-extension/issues"
+		"url": "https://github.com/monsieurbarti/Lightpanda-PI/issues"
 	},
-	"homepage": "https://github.com/monsieurbarti/pi-lightpanda-search-extension#readme",
+	"homepage": "https://github.com/monsieurbarti/Lightpanda-PI#readme",
+	"publishConfig": {
+		"access": "public"
+	},
 	"pi": {
 		"extensions": ["./src/index.ts"]
 	}
