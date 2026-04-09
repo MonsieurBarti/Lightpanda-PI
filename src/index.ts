@@ -4,31 +4,24 @@
  * Uses Lightpanda headless browser for web search with clean Markdown output.
  */
 
-import { spawn } from "node:child_process";
-import { setTimeout } from "node:timers/promises";
+import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { defineTool } from "@mariozechner/pi-coding-agent";
+import { defineTool, truncateTail } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { parseToStructured } from "./content-extractor";
-import {
-	LightpandaNotFoundError,
-	SearchTimeoutError,
-	getInstallInstructions,
-} from "./error-handler";
+import { LightpandaNotFoundError, getInstallInstructions } from "./error-handler";
 import { LightpandaClient } from "./lightpanda-client";
 import { buildSearchUrl, truncateResults } from "./search-orchestrator";
 
 // Extension state
 interface ExtensionState {
 	client: LightpandaClient | null;
-	process: ReturnType<typeof spawn> | null;
 	enabledAsDefault: boolean;
 	binaryPath: string | null;
 }
 
 const state: ExtensionState = {
 	client: null,
-	process: null,
 	enabledAsDefault: false,
 	binaryPath: null,
 };
@@ -38,9 +31,9 @@ const state: ExtensionState = {
  */
 async function searchWithLightpanda(
 	query: string,
+	ctx: { signal?: AbortSignal; exec: ExtensionAPI["exec"] },
 	format: "markdown" | "structured" = "markdown",
 	maxResults = 10,
-	ctx: { signal?: AbortSignal } = {},
 ): Promise<{ content: string; details: Record<string, unknown> }> {
 	if (!state.client || !state.binaryPath) {
 		throw new LightpandaNotFoundError("Lightpanda client not initialized");
@@ -60,45 +53,16 @@ async function searchWithLightpanda(
 			throw new LightpandaNotFoundError("Binary path not set");
 		}
 
-		const result = await Promise.race([
-			new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
-				const proc = spawn(binaryPath, args, {
-					stdio: ["ignore", "pipe", "pipe"],
-				});
-
-				let stdout = "";
-				let stderr = "";
-
-				proc.stdout?.on("data", (data) => {
-					stdout += data.toString();
-				});
-
-				proc.stderr?.on("data", (data) => {
-					stderr += data.toString();
-				});
-
-				proc.on("close", (code) => {
-					resolve({ stdout, stderr, code: code ?? 0 });
-				});
-
-				proc.on("error", reject);
-
-				// Handle abort signal
-				ctx.signal?.addEventListener("abort", () => {
-					proc.kill();
-					reject(new Error("Search aborted"));
-				});
-			}),
-			setTimeout(TIMEOUT_MS).then(() => {
-				throw new SearchTimeoutError(TIMEOUT_MS / 1000);
-			}),
-		]);
-
-		if (result.code !== 0 && !result.stdout) {
-			throw new Error(`Lightpanda failed: ${result.stderr || "Unknown error"}`);
+		// Check signal before starting
+		if (ctx.signal?.aborted) {
+			throw new Error("Search aborted");
 		}
 
-		const markdown = result.stdout.trim();
+		// Use pi.exec() instead of child_process.spawn
+		// Signature: pi.exec(cmd, args, opts?)
+		const result = await ctx.exec(binaryPath, args, { timeout: TIMEOUT_MS });
+
+		const markdown = result.stdout?.trim() || "";
 
 		// Format output
 		let output: string;
@@ -125,9 +89,6 @@ async function searchWithLightpanda(
 			details,
 		};
 	} catch (error) {
-		if (error instanceof SearchTimeoutError) {
-			throw error;
-		}
 		throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
@@ -154,17 +115,23 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 			ctx.ui.notify(`Lightpanda search ready (${binaryPath})`, "info");
 		} catch (error) {
 			if (error instanceof LightpandaNotFoundError) {
-				ctx.ui.notify(getInstallInstructions(), "warning");
+				if (ctx.hasUI) {
+					ctx.ui.notify(getInstallInstructions(), "warning");
+				}
 				// Disable default search if enabled
 				if (state.enabledAsDefault) {
 					state.enabledAsDefault = false;
-					ctx.ui.notify("Lightpanda default search disabled (binary not found)", "warning");
+					if (ctx.hasUI) {
+						ctx.ui.notify("Lightpanda default search disabled (binary not found)", "warning");
+					}
 				}
 			} else {
-				ctx.ui.notify(
-					`Lightpanda init error: ${error instanceof Error ? error.message : String(error)}`,
-					"error",
-				);
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						`Lightpanda init error: ${error instanceof Error ? error.message : String(error)}`,
+						"error",
+					);
+				}
 			}
 		}
 	});
@@ -183,22 +150,28 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		],
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
-			format: Type.Optional(Type.Union([Type.Literal("markdown"), Type.Literal("structured")])),
+			format: Type.Optional(
+				StringEnum(["markdown", "structured"], { description: "Output format" }),
+			),
 			max_results: Type.Optional(
 				Type.Number({ description: "Maximum results (1-50, default 10)" }),
 			),
 		}),
 
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+			const format = (params.format || "markdown") as "markdown" | "structured";
 			const result = await searchWithLightpanda(
 				params.query,
-				params.format || "markdown",
+				{ signal, exec: pi.exec },
+				format,
 				params.max_results || 10,
-				{ signal },
 			);
 
+			// Truncate output to safe limits (50KB / 2000 lines max)
+			const truncatedContent = truncateTail(result.content, { maxBytes: 50000, maxLines: 2000 });
+
 			return {
-				content: [{ type: "text", text: result.content }],
+				content: [{ type: "text", text: truncatedContent.content }],
 				details: result.details,
 			};
 		},
@@ -212,31 +185,29 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			state.enabledAsDefault = !state.enabledAsDefault;
 			const status = state.enabledAsDefault ? "enabled" : "disabled";
-			ctx.ui.notify(`Lightpanda default search ${status}`, "info");
+			if (ctx.hasUI) {
+				ctx.ui.notify(`Lightpanda default search ${status}`, "info");
+			}
 		},
 	});
 
-	// Hook into default search if enabled
-	if (state.enabledAsDefault) {
-		pi.on("before_agent_start", async (event) => {
-			// Check if this is a search query
-			const searchKeywords = ["search", "find", "look up", "google", "what is", "who is"];
-			const isSearchQuery = searchKeywords.some((kw) => event.prompt.toLowerCase().includes(kw));
+	// Hook into default search if enabled (checked at runtime, not load time)
+	pi.on("before_agent_start", async (event) => {
+		if (!state.enabledAsDefault) return;
 
-			if (isSearchQuery && state.client) {
-				// Could inject search result here
-				// For now, just log
-				console.log(`[Lightpanda] Search query detected: ${event.prompt}`);
-			}
-		});
-	}
+		// Check if this is a search query
+		const searchKeywords = ["search", "find", "look up", "google", "what is", "who is"];
+		const isSearchQuery = searchKeywords.some((kw) => event.prompt.toLowerCase().includes(kw));
+
+		if (isSearchQuery && state.client) {
+			// Could inject search result here
+			// For now, just log
+			console.log(`[Lightpanda] Search query detected: ${event.prompt}`);
+		}
+	});
 
 	// Cleanup on shutdown
 	pi.on("session_shutdown", async () => {
-		if (state.process) {
-			state.process.kill();
-			state.process = null;
-		}
 		state.client = null;
 		state.binaryPath = null;
 	});
