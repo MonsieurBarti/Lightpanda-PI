@@ -157,7 +157,7 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
 			format: Type.Optional(
-				StringEnum(["markdown", "structured"], { description: "Output format" }),
+				StringEnum(["markdown", "structured"] as const, { description: "Output format" }),
 			),
 			max_results: Type.Optional(
 				Type.Number({ description: "Maximum results (1-50, default 10)" }),
@@ -165,13 +165,12 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		}),
 
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-			const format = (params.format || "markdown") as "markdown" | "structured";
 			const result = await searchWithLightpanda(
 				pi,
 				params.query,
 				signal,
-				format,
-				params.max_results || 10,
+				params.format ?? "markdown",
+				params.max_results ?? 10,
 			);
 
 			// Truncate output to safe limits (50KB / 2000 lines max)
