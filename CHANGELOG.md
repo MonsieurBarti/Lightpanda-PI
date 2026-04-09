@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.1...lightpanda-pi-v0.1.2) (2026-04-09)
+
+
+### Bug Fixes
+
+* point pi.extensions to dist/index.js ([#14](https://github.com/MonsieurBarti/Lightpanda-PI/issues/14)) ([1439b60](https://github.com/MonsieurBarti/Lightpanda-PI/commit/1439b6041418e802ae8e7b488f412e9860069811))
+
 ## [0.1.1](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.0...lightpanda-pi-v0.1.1) (2026-04-09)
 
 
