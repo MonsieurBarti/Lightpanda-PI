@@ -30,8 +30,9 @@ const state: ExtensionState = {
  * Search the web using Lightpanda browser
  */
 async function searchWithLightpanda(
+	pi: ExtensionAPI,
 	query: string,
-	ctx: { signal?: AbortSignal; exec: ExtensionAPI["exec"] },
+	signal: AbortSignal | undefined,
 	format: "markdown" | "structured" = "markdown",
 	maxResults = 10,
 ): Promise<{ content: string; details: Record<string, unknown> }> {
@@ -54,11 +55,10 @@ async function searchWithLightpanda(
 		}
 
 		// Use pi.exec() instead of child_process.spawn.
-		// Pass signal through so mid-execution aborts kill the lightpanda process,
-		// not just the pre-start check.
-		const result = await ctx.exec(binaryPath, args, {
+		// Pass signal through so mid-execution aborts kill the lightpanda process.
+		const result = await pi.exec(binaryPath, args, {
 			timeout: TIMEOUT_MS,
-			signal: ctx.signal,
+			signal,
 		});
 
 		// Propagate lightpanda failures to the LLM instead of silently returning
@@ -167,8 +167,9 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
 			const format = (params.format || "markdown") as "markdown" | "structured";
 			const result = await searchWithLightpanda(
+				pi,
 				params.query,
-				{ signal, exec: pi.exec },
+				signal,
 				format,
 				params.max_results || 10,
 			);
