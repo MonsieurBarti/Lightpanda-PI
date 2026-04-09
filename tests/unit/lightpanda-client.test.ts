@@ -60,17 +60,22 @@ Snippet: This is an example result.
 			const result = client.detectBinarySync();
 			expect(result).toBe("/custom/path/to/lightpanda");
 
-			// Restore env
+			// Restore env. Note: `process.env.X = undefined` coerces to the
+			// STRING "undefined" (process.env stringifies all assignments), so
+			// we must delete the property to clear it.
 			if (originalEnv) {
 				process.env.LIGHTPANDA_PATH = originalEnv;
 			} else {
-				process.env.LIGHTPANDA_PATH = undefined;
+				Reflect.deleteProperty(process.env, "LIGHTPANDA_PATH");
 			}
 		});
 
 		test("throws LightpandaNotFoundError when binary not found", () => {
 			const originalEnv = process.env.LIGHTPANDA_PATH;
-			process.env.LIGHTPANDA_PATH = undefined;
+			// Must delete — not assign undefined — because process.env coerces
+			// undefined to the string "undefined" which detectBinarySync's
+			// truthy check would then happily return as the binary path.
+			Reflect.deleteProperty(process.env, "LIGHTPANDA_PATH");
 
 			// Mock execSync to throw
 			const client = new LightpandaClient();

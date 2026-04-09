@@ -90,15 +90,17 @@ pi config  # enable/disable individual extensions, skills, prompts, themes
 
 ### As a Tool
 
-The LLM can call `search_web`:
+The LLM can call `tff-search_web`:
 
 ```typescript
-search_web({
+tff-search_web({
   query: "zig best practices 2024",
   format: "markdown",      // "markdown" or "structured"
   max_results: 10          // 1-50, default 10
 })
 ```
+
+> The tool is namespaced with the `tff-` prefix so it can coexist with other pi packages that may also ship a tool named `search_web`. The user-facing display label ("Search Web") stays readable — only the LLM-facing tool id is prefixed.
 
 ### As Default Search
 
@@ -114,7 +116,7 @@ Toggle with `/toggle-lightpanda-search`
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  User Query │────▶│ search_web   │────▶│  Lightpanda │
+│  User Query │────▶│tff-search_web│────▶│  Lightpanda │
 └─────────────┘     │   Tool       │     │   fetch     │
                     └──────────────┘     └──────┬──────┘
                            │                     │

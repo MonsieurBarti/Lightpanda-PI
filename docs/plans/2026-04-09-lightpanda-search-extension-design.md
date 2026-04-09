@@ -44,7 +44,7 @@ A PI extension that uses **Lightpanda** (AI-native headless browser built in Zig
 │  └─────┬─────┘  │
 │        │        │
 │  ┌─────▼─────┐  │
-│  │ search_web │  │  Tool: query, format, max_results
+│  │tff-search_web│  Tool: query, format, max_results
 │  │   Tool    │  │
 │  └─────┬─────┘  │
 └────────┼────────┘
@@ -75,7 +75,7 @@ User Query → PI Extension → Lightpanda Client → CDP Server → DuckDuckGo 
 
 ## Implementation Details
 
-### Tool Registration: `search_web`
+### Tool Registration: `tff-search_web`
 
 ```typescript
 interface SearchWebParams {
