@@ -19,13 +19,11 @@
 		"check:fix": "biome check . --write",
 		"typecheck": "tsc --noEmit"
 	},
-	"dependencies": {
-		"@sinclair/typebox": "^0.34.0"
-	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@commitlint/cli": "^19.0.0",
 		"@commitlint/config-conventional": "^19.0.0",
+		"@sinclair/typebox": "^0.34.0",
 		"@types/node": "^22.0.0",
 		"lefthook": "^2.1.5",
 		"typescript": "^5.7.0",
@@ -34,7 +32,8 @@
 	"peerDependencies": {
 		"@mariozechner/pi-coding-agent": "*",
 		"@mariozechner/pi-ai": "*",
-		"@mariozechner/pi-tui": "*"
+		"@mariozechner/pi-tui": "*",
+		"@sinclair/typebox": "*"
 	},
 	"engines": {
 		"node": ">=20.0.0"
