@@ -6,7 +6,7 @@
 
 import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { defineTool, truncateTail } from "@mariozechner/pi-coding-agent";
+import { defineTool, truncateHead } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { parseToStructured } from "./content-extractor";
 import { LightpandaNotFoundError, getInstallInstructions } from "./error-handler";
@@ -147,12 +147,13 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		name: "search_web",
 		label: "Search Web",
 		description:
-			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results.",
+			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. Single-shot: this tool does not paginate. If the output is truncated, refine the query or lower max_results — do not call the tool again expecting a 'next page'.",
 		promptSnippet: "Search the web for current information",
 		promptGuidelines: [
 			"Use this tool when you need current information from the web",
 			"Prefer markdown format for reading content",
 			"Use structured format when you need to extract specific data fields",
+			"If the result ends with a truncation notice, the output was cut because it exceeded the 50KB/2000-line safety limit. Refine the query to be more specific or lower max_results — calling the tool again with the same arguments will return the same truncated output.",
 		],
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
@@ -173,12 +174,30 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 				params.max_results ?? 10,
 			);
 
-			// Truncate output to safe limits (50KB / 2000 lines max)
-			const truncatedContent = truncateTail(result.content, { maxBytes: 50000, maxLines: 2000 });
+			// Safety-net truncation: keep the TOP of the content (most-relevant results).
+			// truncateHead keeps the first N lines/bytes; truncateTail would keep the bottom
+			// (footer / low-ranked results), which is exactly wrong for ranked search output.
+			const truncated = truncateHead(result.content, { maxBytes: 50000, maxLines: 2000 });
+
+			// Surface truncation to the LLM. Without this, the model would silently assume
+			// the truncated output is the full answer and never think to refine the query.
+			let text = truncated.content;
+			if (truncated.truncated) {
+				const limit = truncated.truncatedBy === "bytes" ? "byte" : "line";
+				text += `\n\n⚠️ Output truncated: showing ${truncated.outputLines}/${truncated.totalLines} lines, ${truncated.outputBytes}/${truncated.totalBytes} bytes (${limit} limit hit). This tool does not paginate — call search_web again with a more specific query or a smaller max_results to get a complete answer.`;
+			}
 
 			return {
-				content: [{ type: "text", text: truncatedContent.content }],
-				details: result.details,
+				content: [{ type: "text", text }],
+				details: {
+					...result.details,
+					truncated: truncated.truncated,
+					truncatedBy: truncated.truncatedBy,
+					totalLines: truncated.totalLines,
+					totalBytes: truncated.totalBytes,
+					outputLines: truncated.outputLines,
+					outputBytes: truncated.outputBytes,
+				},
 			};
 		},
 	});
