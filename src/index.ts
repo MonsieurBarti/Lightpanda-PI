@@ -150,7 +150,10 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 
 	// Register search tool
 	const searchTool = defineTool({
-		name: "search_web",
+		// Namespaced with the tff- prefix so it can coexist with other pi
+		// packages that might ship a tool named "search_web". The LLM calls
+		// this by its full id; the user-facing display uses the `label` below.
+		name: "tff-search_web",
 		label: "Search Web",
 		description:
 			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. When output exceeds the 50KB/2000-line safety limit, the top-ranked results are returned inline and the FULL output is written to a temp file whose path is included in the truncation notice — use your read tool against that path to fetch any remaining content.",
@@ -159,7 +162,7 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 			"Use this tool when you need current information from the web",
 			"Prefer markdown format for reading content",
 			"Use structured format when you need to extract specific data fields",
-			"If the result ends with a truncation notice, the inline output was capped at 50KB/2000 lines and the full output has been written to a temp file. To see the rest, call your read tool against the path in the notice with an offset past the inline portion (e.g., read(path, offset=2001)). Do NOT call search_web again with the same arguments expecting a 'next page' — it is single-shot and would only re-fetch the same results.",
+			"If the result ends with a truncation notice, the inline output was capped at 50KB/2000 lines and the full output has been written to a temp file. To see the rest, call your read tool against the path in the notice with an offset past the inline portion (e.g., read(path, offset=2001)). Do NOT call tff-search_web again with the same arguments expecting a 'next page' — it is single-shot and would only re-fetch the same results.",
 		],
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
@@ -204,7 +207,7 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 				const limit = truncated.truncatedBy === "bytes" ? "byte" : "line";
 				text += `\n\n⚠️ Output truncated: showing ${truncated.outputLines}/${truncated.totalLines} lines (${formatSize(truncated.outputBytes)}/${formatSize(truncated.totalBytes)}, ${limit} limit hit). ${omittedLines} lines (${formatSize(omittedBytes)}) omitted.`;
 				text += `\nFull output saved to: ${fullOutputPath}`;
-				text += `\nTo read the remainder, call your read tool against that path with offset ${truncated.outputLines + 1} (or any line range you need). Do not retry search_web — it is single-shot.`;
+				text += `\nTo read the remainder, call your read tool against that path with offset ${truncated.outputLines + 1} (or any line range you need). Do not retry tff-search_web — it is single-shot.`;
 			}
 
 			return {
