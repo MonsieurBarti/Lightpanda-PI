@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
 	LightpandaNotFoundError,
 	SearchError,
-	SearchTimeoutError,
 	getInstallInstructions,
 } from "../../src/error-handler";
 
@@ -29,15 +28,6 @@ describe("error-handler", () => {
 			const error = new LightpandaNotFoundError("Custom prefix message");
 			expect(error.message).toContain("Custom prefix message");
 			expect(error.message).toContain("Lightpanda not found");
-		});
-	});
-
-	describe("SearchTimeoutError", () => {
-		test("creates error with connection suggestion", () => {
-			const error = new SearchTimeoutError(30);
-			expect(error.message).toContain("Search timed out after 30s");
-			expect(error.name).toBe("SearchTimeoutError");
-			expect(error.message).toContain("check your connection");
 		});
 	});
 

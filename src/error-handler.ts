@@ -27,13 +27,6 @@ export class LightpandaNotFoundError extends Error {
 	}
 }
 
-export class SearchTimeoutError extends Error {
-	constructor(seconds: number) {
-		super(`Search timed out after ${seconds}s. Please check your connection or try again.`);
-		this.name = "SearchTimeoutError";
-	}
-}
-
 export class SearchError extends Error {
 	constructor(message: string) {
 		super(message);

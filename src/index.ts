@@ -4,43 +4,43 @@
  * Uses Lightpanda headless browser for web search with clean Markdown output.
  */
 
-import { spawn } from "node:child_process";
-import { setTimeout } from "node:timers/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { defineTool } from "@mariozechner/pi-coding-agent";
+import { defineTool, formatSize, truncateHead } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { parseToStructured } from "./content-extractor";
-import {
-	LightpandaNotFoundError,
-	SearchTimeoutError,
-	getInstallInstructions,
-} from "./error-handler";
+import { LightpandaNotFoundError, getInstallInstructions } from "./error-handler";
 import { LightpandaClient } from "./lightpanda-client";
 import { buildSearchUrl, truncateResults } from "./search-orchestrator";
 
 // Extension state
 interface ExtensionState {
 	client: LightpandaClient | null;
-	process: ReturnType<typeof spawn> | null;
 	enabledAsDefault: boolean;
 	binaryPath: string | null;
+	/** Temp dirs holding full search output for paginated reads — cleaned on shutdown. */
+	tempDirs: string[];
 }
 
 const state: ExtensionState = {
 	client: null,
-	process: null,
 	enabledAsDefault: false,
 	binaryPath: null,
+	tempDirs: [],
 };
 
 /**
  * Search the web using Lightpanda browser
  */
 async function searchWithLightpanda(
+	pi: ExtensionAPI,
 	query: string,
+	signal: AbortSignal | undefined,
 	format: "markdown" | "structured" = "markdown",
 	maxResults = 10,
-	ctx: { signal?: AbortSignal } = {},
 ): Promise<{ content: string; details: Record<string, unknown> }> {
 	if (!state.client || !state.binaryPath) {
 		throw new LightpandaNotFoundError("Lightpanda client not initialized");
@@ -60,40 +60,16 @@ async function searchWithLightpanda(
 			throw new LightpandaNotFoundError("Binary path not set");
 		}
 
-		const result = await Promise.race([
-			new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
-				const proc = spawn(binaryPath, args, {
-					stdio: ["ignore", "pipe", "pipe"],
-				});
+		// Use pi.exec() instead of child_process.spawn.
+		// Pass signal through so mid-execution aborts kill the lightpanda process.
+		const result = await pi.exec(binaryPath, args, {
+			timeout: TIMEOUT_MS,
+			signal,
+		});
 
-				let stdout = "";
-				let stderr = "";
-
-				proc.stdout?.on("data", (data) => {
-					stdout += data.toString();
-				});
-
-				proc.stderr?.on("data", (data) => {
-					stderr += data.toString();
-				});
-
-				proc.on("close", (code) => {
-					resolve({ stdout, stderr, code: code ?? 0 });
-				});
-
-				proc.on("error", reject);
-
-				// Handle abort signal
-				ctx.signal?.addEventListener("abort", () => {
-					proc.kill();
-					reject(new Error("Search aborted"));
-				});
-			}),
-			setTimeout(TIMEOUT_MS).then(() => {
-				throw new SearchTimeoutError(TIMEOUT_MS / 1000);
-			}),
-		]);
-
+		// Propagate lightpanda failures to the LLM instead of silently returning
+		// empty results — a non-zero exit with no stdout means the fetch failed
+		// (network error, bad URL, crashed process) and the LLM needs to see why.
 		if (result.code !== 0 && !result.stdout) {
 			throw new Error(`Lightpanda failed: ${result.stderr || "Unknown error"}`);
 		}
@@ -125,9 +101,6 @@ async function searchWithLightpanda(
 			details,
 		};
 	} catch (error) {
-		if (error instanceof SearchTimeoutError) {
-			throw error;
-		}
 		throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
@@ -154,17 +127,23 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 			ctx.ui.notify(`Lightpanda search ready (${binaryPath})`, "info");
 		} catch (error) {
 			if (error instanceof LightpandaNotFoundError) {
-				ctx.ui.notify(getInstallInstructions(), "warning");
+				if (ctx.hasUI) {
+					ctx.ui.notify(getInstallInstructions(), "warning");
+				}
 				// Disable default search if enabled
 				if (state.enabledAsDefault) {
 					state.enabledAsDefault = false;
-					ctx.ui.notify("Lightpanda default search disabled (binary not found)", "warning");
+					if (ctx.hasUI) {
+						ctx.ui.notify("Lightpanda default search disabled (binary not found)", "warning");
+					}
 				}
 			} else {
-				ctx.ui.notify(
-					`Lightpanda init error: ${error instanceof Error ? error.message : String(error)}`,
-					"error",
-				);
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						`Lightpanda init error: ${error instanceof Error ? error.message : String(error)}`,
+						"error",
+					);
+				}
 			}
 		}
 	});
@@ -174,32 +153,72 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		name: "search_web",
 		label: "Search Web",
 		description:
-			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results.",
+			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. When output exceeds the 50KB/2000-line safety limit, the top-ranked results are returned inline and the FULL output is written to a temp file whose path is included in the truncation notice — use your read tool against that path to fetch any remaining content.",
 		promptSnippet: "Search the web for current information",
 		promptGuidelines: [
 			"Use this tool when you need current information from the web",
 			"Prefer markdown format for reading content",
 			"Use structured format when you need to extract specific data fields",
+			"If the result ends with a truncation notice, the inline output was capped at 50KB/2000 lines and the full output has been written to a temp file. To see the rest, call your read tool against the path in the notice with an offset past the inline portion (e.g., read(path, offset=2001)). Do NOT call search_web again with the same arguments expecting a 'next page' — it is single-shot and would only re-fetch the same results.",
 		],
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
-			format: Type.Optional(Type.Union([Type.Literal("markdown"), Type.Literal("structured")])),
+			format: Type.Optional(
+				StringEnum(["markdown", "structured"] as const, { description: "Output format" }),
+			),
 			max_results: Type.Optional(
 				Type.Number({ description: "Maximum results (1-50, default 10)" }),
 			),
 		}),
 
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+			const format = params.format ?? "markdown";
 			const result = await searchWithLightpanda(
+				pi,
 				params.query,
-				params.format || "markdown",
-				params.max_results || 10,
-				{ signal },
+				signal,
+				format,
+				params.max_results ?? 10,
 			);
 
+			// Safety-net truncation: keep the TOP of the content (most-relevant results).
+			// truncateHead keeps the first N lines/bytes; truncateTail would keep the bottom
+			// (footer / low-ranked results), which is exactly wrong for ranked search output.
+			const truncated = truncateHead(result.content, { maxBytes: 50000, maxLines: 2000 });
+
+			let text = truncated.content;
+			let fullOutputPath: string | undefined;
+
+			// When the safety net trips, persist the full pre-truncation content to a
+			// temp file and surface the path. The LLM can then use its built-in read
+			// tool to paginate into the remainder by line offset — idiomatic pi-mono
+			// pattern (see coding-agent/examples/extensions/truncated-tool.ts).
+			if (truncated.truncated) {
+				const tempDir = await mkdtemp(join(tmpdir(), "pi-lightpanda-search-"));
+				state.tempDirs.push(tempDir);
+				fullOutputPath = join(tempDir, format === "structured" ? "output.json" : "output.md");
+				await writeFile(fullOutputPath, result.content, "utf8");
+
+				const omittedLines = truncated.totalLines - truncated.outputLines;
+				const omittedBytes = truncated.totalBytes - truncated.outputBytes;
+				const limit = truncated.truncatedBy === "bytes" ? "byte" : "line";
+				text += `\n\n⚠️ Output truncated: showing ${truncated.outputLines}/${truncated.totalLines} lines (${formatSize(truncated.outputBytes)}/${formatSize(truncated.totalBytes)}, ${limit} limit hit). ${omittedLines} lines (${formatSize(omittedBytes)}) omitted.`;
+				text += `\nFull output saved to: ${fullOutputPath}`;
+				text += `\nTo read the remainder, call your read tool against that path with offset ${truncated.outputLines + 1} (or any line range you need). Do not retry search_web — it is single-shot.`;
+			}
+
 			return {
-				content: [{ type: "text", text: result.content }],
-				details: result.details,
+				content: [{ type: "text", text }],
+				details: {
+					...result.details,
+					truncated: truncated.truncated,
+					truncatedBy: truncated.truncatedBy,
+					totalLines: truncated.totalLines,
+					totalBytes: truncated.totalBytes,
+					outputLines: truncated.outputLines,
+					outputBytes: truncated.outputBytes,
+					...(fullOutputPath ? { fullOutputPath } : {}),
+				},
 			};
 		},
 	});
@@ -212,31 +231,35 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			state.enabledAsDefault = !state.enabledAsDefault;
 			const status = state.enabledAsDefault ? "enabled" : "disabled";
-			ctx.ui.notify(`Lightpanda default search ${status}`, "info");
+			if (ctx.hasUI) {
+				ctx.ui.notify(`Lightpanda default search ${status}`, "info");
+			}
 		},
 	});
 
-	// Hook into default search if enabled
-	if (state.enabledAsDefault) {
-		pi.on("before_agent_start", async (event) => {
-			// Check if this is a search query
-			const searchKeywords = ["search", "find", "look up", "google", "what is", "who is"];
-			const isSearchQuery = searchKeywords.some((kw) => event.prompt.toLowerCase().includes(kw));
+	// Hook into default search if enabled (checked at runtime, not load time)
+	pi.on("before_agent_start", async (event) => {
+		if (!state.enabledAsDefault) return;
 
-			if (isSearchQuery && state.client) {
-				// Could inject search result here
-				// For now, just log
-				console.log(`[Lightpanda] Search query detected: ${event.prompt}`);
-			}
-		});
-	}
+		// Check if this is a search query
+		const searchKeywords = ["search", "find", "look up", "google", "what is", "who is"];
+		const isSearchQuery = searchKeywords.some((kw) => event.prompt.toLowerCase().includes(kw));
+
+		if (isSearchQuery && state.client) {
+			// Could inject search result here
+			// For now, just log
+			console.log(`[Lightpanda] Search query detected: ${event.prompt}`);
+		}
+	});
 
 	// Cleanup on shutdown
 	pi.on("session_shutdown", async () => {
-		if (state.process) {
-			state.process.kill();
-			state.process = null;
-		}
+		// Remove any temp dirs holding full search output. Failures are swallowed
+		// per dir so one bad path doesn't block cleanup of the others.
+		await Promise.all(
+			state.tempDirs.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)),
+		);
+		state.tempDirs = [];
 		state.client = null;
 		state.binaryPath = null;
 	});
