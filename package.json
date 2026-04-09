@@ -5,7 +5,11 @@
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"test": "vitest run",
@@ -39,7 +43,15 @@
 	"engines": {
 		"node": ">=20.0.0"
 	},
-	"keywords": ["pi-package", "pi", "extension", "lightpanda", "search", "browser", "headless"],
+	"keywords": [
+		"pi-package",
+		"pi",
+		"extension",
+		"lightpanda",
+		"search",
+		"browser",
+		"headless"
+	],
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -53,6 +65,8 @@
 		"access": "public"
 	},
 	"pi": {
-		"extensions": ["./src/index.ts"]
+		"extensions": [
+			"./src/index.ts"
+		]
 	}
 }
