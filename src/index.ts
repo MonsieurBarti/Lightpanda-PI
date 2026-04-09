@@ -53,16 +53,22 @@ async function searchWithLightpanda(
 			throw new LightpandaNotFoundError("Binary path not set");
 		}
 
-		// Check signal before starting
-		if (ctx.signal?.aborted) {
-			throw new Error("Search aborted");
+		// Use pi.exec() instead of child_process.spawn.
+		// Pass signal through so mid-execution aborts kill the lightpanda process,
+		// not just the pre-start check.
+		const result = await ctx.exec(binaryPath, args, {
+			timeout: TIMEOUT_MS,
+			signal: ctx.signal,
+		});
+
+		// Propagate lightpanda failures to the LLM instead of silently returning
+		// empty results — a non-zero exit with no stdout means the fetch failed
+		// (network error, bad URL, crashed process) and the LLM needs to see why.
+		if (result.code !== 0 && !result.stdout) {
+			throw new Error(`Lightpanda failed: ${result.stderr || "Unknown error"}`);
 		}
 
-		// Use pi.exec() instead of child_process.spawn
-		// Signature: pi.exec(cmd, args, opts?)
-		const result = await ctx.exec(binaryPath, args, { timeout: TIMEOUT_MS });
-
-		const markdown = result.stdout?.trim() || "";
+		const markdown = result.stdout.trim();
 
 		// Format output
 		let output: string;
