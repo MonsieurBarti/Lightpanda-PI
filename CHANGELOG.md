@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.2...lightpanda-pi-v0.1.3) (2026-04-09)
+
+
+### Bug Fixes
+
+* apply GSD extension skill guidelines ([#16](https://github.com/MonsieurBarti/Lightpanda-PI/issues/16)) ([c3bbb85](https://github.com/MonsieurBarti/Lightpanda-PI/commit/c3bbb85240dbea69c2ff32bf42cee65ede2ce102))
+
 ## [0.1.2](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.1...lightpanda-pi-v0.1.2) (2026-04-09)
 
 
