@@ -1,0 +1,51 @@
+{
+	"name": "pi-lightpanda-search-extension",
+	"version": "0.1.0",
+	"description": "PI extension for web search using Lightpanda headless browser",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": ["dist", "README.md", "LICENSE"],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"lint": "biome lint .",
+		"lint:fix": "biome lint . --write",
+		"format": "biome format .",
+		"format:fix": "biome format . --write",
+		"check": "biome check .",
+		"check:fix": "biome check . --write",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@sinclair/typebox": "^0.34.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@commitlint/cli": "^19.0.0",
+		"@commitlint/config-conventional": "^19.0.0",
+		"@mariozechner/pi-coding-agent": "file:/Users/monsieurbarti/.nvm/versions/node/v22.22.2/lib/node_modules/@mariozechner/pi-coding-agent",
+		"@types/node": "^22.0.0",
+		"lefthook": "^2.1.5",
+		"typescript": "^5.7.0",
+		"vitest": "^2.1.0"
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": ">=0.66.0"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"keywords": ["pi", "extension", "lightpanda", "search", "browser", "headless"],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/monsieurbarti/pi-lightpanda-search-extension.git"
+	},
+	"bugs": {
+		"url": "https://github.com/monsieurbarti/pi-lightpanda-search-extension/issues"
+	},
+	"homepage": "https://github.com/monsieurbarti/pi-lightpanda-search-extension#readme"
+}
