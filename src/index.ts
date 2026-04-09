@@ -4,9 +4,12 @@
  * Uses Lightpanda headless browser for web search with clean Markdown output.
  */
 
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { defineTool, truncateHead } from "@mariozechner/pi-coding-agent";
+import { defineTool, formatSize, truncateHead } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { parseToStructured } from "./content-extractor";
 import { LightpandaNotFoundError, getInstallInstructions } from "./error-handler";
@@ -18,12 +21,15 @@ interface ExtensionState {
 	client: LightpandaClient | null;
 	enabledAsDefault: boolean;
 	binaryPath: string | null;
+	/** Temp dirs holding full search output for paginated reads — cleaned on shutdown. */
+	tempDirs: string[];
 }
 
 const state: ExtensionState = {
 	client: null,
 	enabledAsDefault: false,
 	binaryPath: null,
+	tempDirs: [],
 };
 
 /**
@@ -147,13 +153,13 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		name: "search_web",
 		label: "Search Web",
 		description:
-			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. Single-shot: this tool does not paginate. If the output is truncated, refine the query or lower max_results — do not call the tool again expecting a 'next page'.",
+			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. When output exceeds the 50KB/2000-line safety limit, the top-ranked results are returned inline and the FULL output is written to a temp file whose path is included in the truncation notice — use your read tool against that path to fetch any remaining content.",
 		promptSnippet: "Search the web for current information",
 		promptGuidelines: [
 			"Use this tool when you need current information from the web",
 			"Prefer markdown format for reading content",
 			"Use structured format when you need to extract specific data fields",
-			"If the result ends with a truncation notice, the output was cut because it exceeded the 50KB/2000-line safety limit. Refine the query to be more specific or lower max_results — calling the tool again with the same arguments will return the same truncated output.",
+			"If the result ends with a truncation notice, the inline output was capped at 50KB/2000 lines and the full output has been written to a temp file. To see the rest, call your read tool against the path in the notice with an offset past the inline portion (e.g., read(path, offset=2001)). Do NOT call search_web again with the same arguments expecting a 'next page' — it is single-shot and would only re-fetch the same results.",
 		],
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
@@ -166,11 +172,12 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 		}),
 
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+			const format = params.format ?? "markdown";
 			const result = await searchWithLightpanda(
 				pi,
 				params.query,
 				signal,
-				params.format ?? "markdown",
+				format,
 				params.max_results ?? 10,
 			);
 
@@ -179,12 +186,25 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 			// (footer / low-ranked results), which is exactly wrong for ranked search output.
 			const truncated = truncateHead(result.content, { maxBytes: 50000, maxLines: 2000 });
 
-			// Surface truncation to the LLM. Without this, the model would silently assume
-			// the truncated output is the full answer and never think to refine the query.
 			let text = truncated.content;
+			let fullOutputPath: string | undefined;
+
+			// When the safety net trips, persist the full pre-truncation content to a
+			// temp file and surface the path. The LLM can then use its built-in read
+			// tool to paginate into the remainder by line offset — idiomatic pi-mono
+			// pattern (see coding-agent/examples/extensions/truncated-tool.ts).
 			if (truncated.truncated) {
+				const tempDir = await mkdtemp(join(tmpdir(), "pi-lightpanda-search-"));
+				state.tempDirs.push(tempDir);
+				fullOutputPath = join(tempDir, format === "structured" ? "output.json" : "output.md");
+				await writeFile(fullOutputPath, result.content, "utf8");
+
+				const omittedLines = truncated.totalLines - truncated.outputLines;
+				const omittedBytes = truncated.totalBytes - truncated.outputBytes;
 				const limit = truncated.truncatedBy === "bytes" ? "byte" : "line";
-				text += `\n\n⚠️ Output truncated: showing ${truncated.outputLines}/${truncated.totalLines} lines, ${truncated.outputBytes}/${truncated.totalBytes} bytes (${limit} limit hit). This tool does not paginate — call search_web again with a more specific query or a smaller max_results to get a complete answer.`;
+				text += `\n\n⚠️ Output truncated: showing ${truncated.outputLines}/${truncated.totalLines} lines (${formatSize(truncated.outputBytes)}/${formatSize(truncated.totalBytes)}, ${limit} limit hit). ${omittedLines} lines (${formatSize(omittedBytes)}) omitted.`;
+				text += `\nFull output saved to: ${fullOutputPath}`;
+				text += `\nTo read the remainder, call your read tool against that path with offset ${truncated.outputLines + 1} (or any line range you need). Do not retry search_web — it is single-shot.`;
 			}
 
 			return {
@@ -197,6 +217,7 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 					totalBytes: truncated.totalBytes,
 					outputLines: truncated.outputLines,
 					outputBytes: truncated.outputBytes,
+					...(fullOutputPath ? { fullOutputPath } : {}),
 				},
 			};
 		},
@@ -233,6 +254,12 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 
 	// Cleanup on shutdown
 	pi.on("session_shutdown", async () => {
+		// Remove any temp dirs holding full search output. Failures are swallowed
+		// per dir so one bad path doesn't block cleanup of the others.
+		await Promise.all(
+			state.tempDirs.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)),
+		);
+		state.tempDirs = [];
 		state.client = null;
 		state.binaryPath = null;
 	});
