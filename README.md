@@ -8,14 +8,14 @@
   </p>
   
   <p>
-    <a href="https://github.com/MonsieurBarti/pi-lightpanda-search-extension/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/github/actions/workflow/status/MonsieurBarti/pi-lightpanda-search-extension/ci.yml?label=CI&style=flat-square" alt="CI Status">
+    <a href="https://github.com/MonsieurBarti/Lightpanda-PI/actions/workflows/ci.yml">
+      <img src="https://img.shields.io/github/actions/workflow/status/MonsieurBarti/Lightpanda-PI/ci.yml?label=CI&style=flat-square" alt="CI Status">
     </a>
-    <a href="https://www.npmjs.com/package/pi-lightpanda-search-extension">
-      <img src="https://img.shields.io/npm/v/pi-lightpanda-search-extension?style=flat-square" alt="npm version">
+    <a href="https://www.npmjs.com/package/@the-forge-flow/lightpanda-pi">
+      <img src="https://img.shields.io/npm/v/@the-forge-flow/lightpanda-pi?style=flat-square" alt="npm version">
     </a>
     <a href="LICENSE">
-      <img src="https://img.shields.io/github/license/MonsieurBarti/pi-lightpanda-search-extension?style=flat-square" alt="License">
+      <img src="https://img.shields.io/github/license/MonsieurBarti/Lightpanda-PI?style=flat-square" alt="License">
     </a>
   </p>
 </div>
@@ -32,9 +32,9 @@
 
 ## 📦 Installation
 
-### Prerequisites
+### 1. Install the Lightpanda browser
 
-Install Lightpanda locally:
+The extension shells out to the Lightpanda binary, so it must be on your `PATH`.
 
 ```bash
 # Quick install
@@ -45,19 +45,46 @@ git clone https://github.com/lightpanda-io/browser
 cd browser && zig build
 ```
 
-### Install Extension
+Verify with `lightpanda --version`. If it lives somewhere non-standard, set `LIGHTPANDA_PATH` to its absolute path.
+
+### 2. Install the extension with `pi install`
+
+PI discovers the extension automatically once installed as a pi package. By default this installs globally into `~/.pi/agent/`; pass `-l` to install into the current project (`.pi/`) instead.
+
+**From npm (recommended):**
 
 ```bash
-# Via npm (when published)
-npm install -g pi-lightpanda-search-extension
-
-# Or copy to PI extensions
-mkdir -p ~/.pi/agent/extensions
-cp -r . ~/.pi/agent/extensions/lightpanda-search
-cd ~/.pi/agent/extensions/lightpanda-search && bun install
+pi install npm:@the-forge-flow/lightpanda-pi
 ```
 
-Reload PI with `/reload`.
+**From GitHub (tracks `main`):**
+
+```bash
+pi install git:github.com/MonsieurBarti/Lightpanda-PI
+```
+
+**Pin to a specific version:**
+
+```bash
+# npm — pin to a published version
+pi install npm:@the-forge-flow/lightpanda-pi@0.1.0
+
+# git — pin to a release tag
+pi install git:github.com/MonsieurBarti/Lightpanda-PI@lightpanda-pi-v0.1.0
+```
+
+Then reload PI with `/reload` (or restart it). Verify the tool is live by running `/toggle-lightpanda-search` or asking the agent to search the web.
+
+**Manage installed packages:**
+
+```bash
+pi list    # show installed packages
+pi update  # update non-pinned packages
+pi remove npm:@the-forge-flow/lightpanda-pi
+pi config  # enable/disable individual extensions, skills, prompts, themes
+```
+
+> For project-scoped installs, package filtering, and more, see the [pi packages doc](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md).
 
 ## 🚀 Usage
 
