@@ -26,19 +26,20 @@
 		"@biomejs/biome": "^1.9.4",
 		"@commitlint/cli": "^19.0.0",
 		"@commitlint/config-conventional": "^19.0.0",
-		"@mariozechner/pi-coding-agent": "file:/Users/monsieurbarti/.nvm/versions/node/v22.22.2/lib/node_modules/@mariozechner/pi-coding-agent",
 		"@types/node": "^22.0.0",
 		"lefthook": "^2.1.5",
 		"typescript": "^5.7.0",
 		"vitest": "^2.1.0"
 	},
 	"peerDependencies": {
-		"@mariozechner/pi-coding-agent": ">=0.66.0"
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-tui": "*"
 	},
 	"engines": {
 		"node": ">=20.0.0"
 	},
-	"keywords": ["pi", "extension", "lightpanda", "search", "browser", "headless"],
+	"keywords": ["pi-package", "pi", "extension", "lightpanda", "search", "browser", "headless"],
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -47,5 +48,8 @@
 	"bugs": {
 		"url": "https://github.com/monsieurbarti/pi-lightpanda-search-extension/issues"
 	},
-	"homepage": "https://github.com/monsieurbarti/pi-lightpanda-search-extension#readme"
+	"homepage": "https://github.com/monsieurbarti/pi-lightpanda-search-extension#readme",
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	}
 }
