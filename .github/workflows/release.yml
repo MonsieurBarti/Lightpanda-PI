@@ -31,8 +31,8 @@ jobs:
         uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: node
-          package-name: "@the-forge-flow/lightpanda-pi"
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
       - name: Publish to npm
         if: ${{ steps.release.outputs.release_created }}
