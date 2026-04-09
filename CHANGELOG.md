@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.0...lightpanda-pi-v0.1.1) (2026-04-09)
+
+
+### Bug Fixes
+
+* **release:** use NPM_CONFIG_TOKEN for bun publish auth ([#8](https://github.com/MonsieurBarti/Lightpanda-PI/issues/8)) ([99a7671](https://github.com/MonsieurBarti/Lightpanda-PI/commit/99a7671c079f37c179cfb7aa0828953440b6bfd8))
+
 ## [0.1.0](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.0...lightpanda-pi-v0.1.0) (2026-04-09)
 
 
