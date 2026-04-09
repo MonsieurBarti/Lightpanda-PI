@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.3...lightpanda-pi-v0.2.0) (2026-04-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* any saved prompts, skills, or slash-command templates that hardcode the old tool id (`search_web`) must be updated. Live LLM sessions pick up the new name automatically from the registered tool list.
+
+### Code Refactoring
+
+* namespace tool id as tff-search_web + baseline fixes ([#18](https://github.com/MonsieurBarti/Lightpanda-PI/issues/18)) ([4f4a444](https://github.com/MonsieurBarti/Lightpanda-PI/commit/4f4a444e1f92c5a69074384b1cd096fa6f8852fe))
+
 ## [0.1.3](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.2...lightpanda-pi-v0.1.3) (2026-04-09)
 
 
