@@ -1,6 +1,6 @@
 {
 	"name": "@the-forge-flow/lightpanda-pi",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "PI extension for web search using Lightpanda headless browser",
 	"type": "module",
 	"main": "dist/index.js",
