@@ -159,6 +159,7 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 			"Search the web using Lightpanda headless browser. Returns clean Markdown or structured JSON results. When output exceeds the 50KB/2000-line safety limit, the top-ranked results are returned inline and the FULL output is written to a temp file whose path is included in the truncation notice — use your read tool against that path to fetch any remaining content.",
 		promptSnippet: "Search the web for current information",
 		promptGuidelines: [
+			"This tool is read-only (no side effects). Safe to call in parallel with other read-only tools.",
 			"Use this tool when you need current information from the web",
 			"Prefer markdown format for reading content",
 			"Use structured format when you need to extract specific data fields",
