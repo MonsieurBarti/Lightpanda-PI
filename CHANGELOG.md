@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.2.1...lightpanda-pi-v0.2.2) (2026-04-11)
+
+
+### Features
+
+* add update notification on session start ([#23](https://github.com/MonsieurBarti/Lightpanda-PI/issues/23)) ([ba2a890](https://github.com/MonsieurBarti/Lightpanda-PI/commit/ba2a890927a44569295cc5019b2e0aa4bd6f6760))
+
 ## [0.2.1](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.2.0...lightpanda-pi-v0.2.1) (2026-04-11)
 
 
