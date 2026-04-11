@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.2.0...lightpanda-pi-v0.2.1) (2026-04-11)
+
+
+### Features
+
+* add read-only classification to search tool prompt guidelines ([#21](https://github.com/MonsieurBarti/Lightpanda-PI/issues/21)) ([b1e76b5](https://github.com/MonsieurBarti/Lightpanda-PI/commit/b1e76b544fa6e41df0912cd5cb65d6dc0dbbfe7f))
+
 ## [0.2.0](https://github.com/MonsieurBarti/Lightpanda-PI/compare/lightpanda-pi-v0.1.3...lightpanda-pi-v0.2.0) (2026-04-09)
 
 
