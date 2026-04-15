@@ -127,14 +127,15 @@ export default function lightpandaSearchExtension(pi: ExtensionAPI) {
 
 			ctx.ui.notify(`Lightpanda search ready (${binaryPath})`, "info");
 
-			// Check for extension updates
-			const updateInfo = await checkForUpdates(pi);
-			if (updateInfo?.updateAvailable) {
-				ctx.ui.notify(
-					`📦 Update available: ${updateInfo.latestVersion} (you have ${updateInfo.currentVersion}). Run: pi install npm:@the-forge-flow/lightpanda-pi`,
-					"info",
-				);
-			}
+			// Check for extension updates (non-blocking)
+			void checkForUpdates(pi).then((info) => {
+				if (info?.updateAvailable) {
+					ctx.ui.notify(
+						`📦 Update available: ${info.latestVersion} (you have ${info.currentVersion}). Run: pi install npm:@the-forge-flow/lightpanda-pi`,
+						"info",
+					);
+				}
+			});
 		} catch (error) {
 			if (error instanceof LightpandaNotFoundError) {
 				if (ctx.hasUI) {
