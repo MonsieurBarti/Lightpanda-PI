@@ -14,7 +14,7 @@ import { Type } from "@sinclair/typebox";
 import { parseToStructured } from "./content-extractor";
 import { LightpandaNotFoundError, getInstallInstructions } from "./error-handler";
 import { LightpandaClient } from "./lightpanda-client";
-import { buildSearchUrl, truncateResults } from "./search-orchestrator";
+import { buildSearchUrls, truncateResults } from "./search-orchestrator";
 import { checkForUpdates } from "./update-check.js";
 
 // Extension state
@@ -47,63 +47,68 @@ async function searchWithLightpanda(
 		throw new LightpandaNotFoundError("Lightpanda client not initialized");
 	}
 
-	const searchUrl = buildSearchUrl(query);
-
-	// Use Lightpanda's dump mode for clean markdown extraction
-	const args = ["fetch", searchUrl, "--dump", "markdown"];
-
-	try {
-		// Execute Lightpanda with timeout
-		const TIMEOUT_MS = 30000;
-
-		const binaryPath = state.binaryPath;
-		if (!binaryPath) {
-			throw new LightpandaNotFoundError("Binary path not set");
-		}
-
-		// Use pi.exec() instead of child_process.spawn.
-		// Pass signal through so mid-execution aborts kill the lightpanda process.
-		const result = await pi.exec(binaryPath, args, {
-			timeout: TIMEOUT_MS,
-			signal,
-		});
-
-		// Propagate lightpanda failures to the LLM instead of silently returning
-		// empty results — a non-zero exit with no stdout means the fetch failed
-		// (network error, bad URL, crashed process) and the LLM needs to see why.
-		if (result.code !== 0 && !result.stdout) {
-			throw new Error(`Lightpanda failed: ${result.stderr || "Unknown error"}`);
-		}
-
-		const markdown = result.stdout.trim();
-
-		// Format output
-		let output: string;
-		const details: Record<string, unknown> = {
-			query,
-			url: searchUrl,
-			format,
-			timestamp: new Date().toISOString(),
-		};
-
-		if (format === "structured") {
-			const results = parseToStructured(markdown);
-			const truncated = truncateResults(results, maxResults);
-			output = JSON.stringify({ results: truncated }, null, 2);
-			details.resultCount = truncated.length;
-		} else {
-			// Markdown format
-			output = markdown || "No results found.";
-			details.rawLength = markdown.length;
-		}
-
-		return {
-			content: output,
-			details,
-		};
-	} catch (error) {
-		throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
+	// Try multiple SearXNG instances with fallback.
+	// Each instance may block headless browsers at different times,
+	// so we try them in order and pick the first one that returns results.
+	const urls = buildSearchUrls(query);
+	const binaryPath = state.binaryPath;
+	if (!binaryPath) {
+		throw new LightpandaNotFoundError("Binary path not set");
 	}
+
+	const TIMEOUT_MS = 20000;
+	const errors: string[] = [];
+
+	for (const url of urls) {
+		try {
+			const args = ["fetch", url, "--dump", "markdown", "--wait-ms", "4000"];
+			const result = await pi.exec(binaryPath, args, {
+				timeout: TIMEOUT_MS,
+				signal,
+			});
+
+			const markdown = result.stdout?.trim() || "";
+
+			// Accept the result if it has real search content
+			// (at least 200 chars and doesn't look like a block page)
+			if (
+				markdown.length > 200 &&
+				!markdown.includes("Too Many Requests") &&
+				!markdown.includes("403") &&
+				!markdown.includes("Forbidden")
+			) {
+				let output: string;
+				const details: Record<string, unknown> = {
+					query,
+					url,
+					format,
+					timestamp: new Date().toISOString(),
+				};
+
+				if (format === "structured") {
+					const parsedResults = parseToStructured(markdown);
+					const truncated = truncateResults(parsedResults, maxResults);
+					output = JSON.stringify({ results: truncated }, null, 2);
+					details.resultCount = truncated.length;
+				} else {
+					output = markdown || "No results found.";
+					details.rawLength = markdown.length;
+				}
+
+				return {
+					content: output,
+					details,
+				};
+			} else {
+				errors.push(`[${new URL(url).hostname}] blocked or empty`);
+			}
+		} catch (err) {
+			const hostname = new URL(url).hostname;
+			errors.push(`[${hostname}] ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
+	throw new Error(`All search instances failed: ${errors.join("; ")}`);
 }
 
 /**
